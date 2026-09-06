@@ -5,6 +5,7 @@ import com.ccsutd.miniproject.dto.DatasetSplit;
 import com.ccsutd.miniproject.service.DatasetService;
 import com.ccsutd.miniproject.service.FeatureSelectionService;
 import com.ccsutd.miniproject.service.MachineLearningService;
+import com.ccsutd.miniproject.service.OcSvmService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +34,9 @@ public class MLController {
     @Autowired
     private FeatureSelectionService featureSelectionService;
 
+    @Autowired
+    private OcSvmService ocSvmService;
+
     // Hardcoded known classes for evaluation matching DatasetService
     private static final Set<String> KNOWN_CLASSES = new HashSet<>(Arrays.asList(
             "BROWSING", "CHAT", "STREAMING", "MAIL", "VOIP"
@@ -43,20 +47,16 @@ public class MLController {
             @RequestParam(defaultValue = "../Scenario A2-ARFF/Scenario A2-ARFF/TimeBasedFeatures-Dataset-15s-NO-VPN.arff") String filePath) {
         
         try {
-            // 1. Load and split dataset
             Instances rawData = datasetService.loadDataset(filePath);
             DatasetSplit split = datasetService.prepareOpenSetExperiment(rawData);
 
-            // 2. Apply Feature Selection (Phase 6)
             Instances reducedKnownTraining = featureSelectionService.fitAndTransform(split.getKnownTrainingData());
             Instances reducedTesting = featureSelectionService.transform(split.getTestingData());
 
-            // 3. Train H2 on the reduced KnownC features
             long startTrain = System.currentTimeMillis();
             mlService.trainH2Classifier(reducedKnownTraining);
             long trainTime = System.currentTimeMillis() - startTrain;
 
-            // 4. Evaluate on testing dataset
             int totalTested = 0;
             int correctKnown = 0; 
             int correctNew = 0;   
@@ -88,12 +88,8 @@ public class MLController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
-            
-            // Output Phase 6 selection metrics
             response.put("originalFeatureCount", rawData.numAttributes() - 1);
             response.put("selectedFeatureCount", featureSelectionService.getSelectedFeatureNames().size());
-            response.put("selectedFeatures", featureSelectionService.getSelectedFeatureNames());
-
             response.put("trainTimeMs", trainTime);
             response.put("totalTested", totalTested);
             response.put("correctKnown", correctKnown);
@@ -101,14 +97,11 @@ public class MLController {
             response.put("falseKnown", falseKnown);
             response.put("falseNew", falseNew);
 
-            // Calculate preliminary metrics
             int totalActuallyKnown = correctKnown + falseNew;
             int totalActuallyNew = correctNew + falseKnown;
             
             double knownAccuracy = totalActuallyKnown > 0 ? (double) correctKnown / totalActuallyKnown : 0;
             double unknownAccuracy = totalActuallyNew > 0 ? (double) correctNew / totalActuallyNew : 0;
-            
-            // Normalized Accuracy (NA)
             double normalizedAccuracy = 0.5 * knownAccuracy + 0.5 * unknownAccuracy;
 
             Map<String, Double> metrics = new HashMap<>();
@@ -126,25 +119,18 @@ public class MLController {
         }
     }
 
-    @Autowired
-    private com.ccsutd.miniproject.service.OcSvmService ocSvmService;
-
     @GetMapping("/extract-pseudo-negatives")
     public ResponseEntity<Map<String, Object>> extractPseudoNegatives(
             @RequestParam(defaultValue = "../Scenario A2-ARFF/Scenario A2-ARFF/TimeBasedFeatures-Dataset-15s-NO-VPN.arff") String filePath) {
-        
         try {
-            // Load, split, and reduce dataset
             Instances rawData = datasetService.loadDataset(filePath);
             DatasetSplit split = datasetService.prepareOpenSetExperiment(rawData);
             
             Instances reducedKnownTraining = featureSelectionService.fitAndTransform(split.getKnownTrainingData());
             Instances reducedUnlabelled = featureSelectionService.transform(split.getUnlabelledData());
 
-            // Train H2 (needed for confidence checks)
             mlService.trainH2Classifier(reducedKnownTraining);
 
-            // Phase 7: Extract pseudo-negatives
             long startExtract = System.currentTimeMillis();
             Instances pseudoNegatives = ocSvmService.selectPseudoNegatives(reducedKnownTraining, reducedUnlabelled);
             long extractTime = System.currentTimeMillis() - startExtract;
@@ -154,6 +140,38 @@ public class MLController {
             response.put("extractTimeMs", extractTime);
             response.put("totalUnlabelledSamples", reducedUnlabelled.numInstances());
             response.put("pseudoNegativesFound", pseudoNegatives.numInstances());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    @GetMapping("/train-h1")
+    public ResponseEntity<Map<String, Object>> trainH1(
+            @RequestParam(defaultValue = "../Scenario A2-ARFF/Scenario A2-ARFF/TimeBasedFeatures-Dataset-15s-NO-VPN.arff") String filePath) {
+        try {
+            Instances rawData = datasetService.loadDataset(filePath);
+            DatasetSplit split = datasetService.prepareOpenSetExperiment(rawData);
+            
+            Instances reducedKnownTraining = featureSelectionService.fitAndTransform(split.getKnownTrainingData());
+            Instances reducedUnlabelled = featureSelectionService.transform(split.getUnlabelledData());
+
+            mlService.trainH2Classifier(reducedKnownTraining);
+            Instances pseudoNegatives = ocSvmService.selectPseudoNegatives(reducedKnownTraining, reducedUnlabelled);
+
+            long startTrainH1 = System.currentTimeMillis();
+            mlService.trainH1Classifier(reducedKnownTraining, pseudoNegatives);
+            long trainH1Time = System.currentTimeMillis() - startTrainH1;
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("h1TrainTimeMs", trainH1Time);
+            response.put("knownSamplesUsed", reducedKnownTraining.numInstances());
+            response.put("pseudoNegativesUsed", pseudoNegatives.numInstances());
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
