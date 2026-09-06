@@ -125,4 +125,42 @@ public class MLController {
             return ResponseEntity.badRequest().body(error);
         }
     }
+
+    @Autowired
+    private com.ccsutd.miniproject.service.OcSvmService ocSvmService;
+
+    @GetMapping("/extract-pseudo-negatives")
+    public ResponseEntity<Map<String, Object>> extractPseudoNegatives(
+            @RequestParam(defaultValue = "../Scenario A2-ARFF/Scenario A2-ARFF/TimeBasedFeatures-Dataset-15s-NO-VPN.arff") String filePath) {
+        
+        try {
+            // Load, split, and reduce dataset
+            Instances rawData = datasetService.loadDataset(filePath);
+            DatasetSplit split = datasetService.prepareOpenSetExperiment(rawData);
+            
+            Instances reducedKnownTraining = featureSelectionService.fitAndTransform(split.getKnownTrainingData());
+            Instances reducedUnlabelled = featureSelectionService.transform(split.getUnlabelledData());
+
+            // Train H2 (needed for confidence checks)
+            mlService.trainH2Classifier(reducedKnownTraining);
+
+            // Phase 7: Extract pseudo-negatives
+            long startExtract = System.currentTimeMillis();
+            Instances pseudoNegatives = ocSvmService.selectPseudoNegatives(reducedKnownTraining, reducedUnlabelled);
+            long extractTime = System.currentTimeMillis() - startExtract;
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("extractTimeMs", extractTime);
+            response.put("totalUnlabelledSamples", reducedUnlabelled.numInstances());
+            response.put("pseudoNegativesFound", pseudoNegatives.numInstances());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
 }
