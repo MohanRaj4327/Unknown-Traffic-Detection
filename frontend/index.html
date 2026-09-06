@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCS-UTD Mini Project Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <h1>Network Traffic Classification (CCS-UTD)</h1>
+        <p>A Java-based implementation inspired by the CCS-UTD cascade structure.</p>
+    </header>
+
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <ul>
+                <li><a href="#" onclick="showSection('dashboard')">Dashboard</a></li>
+                <li><a href="#" onclick="showSection('dataset')">Dataset</a></li>
+                <li><a href="#" onclick="showSection('model')">Model / Training</a></li>
+                <li><a href="#" onclick="showSection('prediction')">Predict</a></li>
+                <li><a href="#" onclick="showSection('results')">Results & Metrics</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="active">
+                <h2>Dashboard Overview</h2>
+                <div class="stats-grid">
+                    <div class="stat-card"><h3>Total Predictions</h3><p id="stat-total">0</p></div>
+                    <div class="stat-card"><h3>Known Class</h3><p id="stat-known">0</p></div>
+                    <div class="stat-card"><h3>New Class</h3><p id="stat-new">0</p></div>
+                    <div class="stat-card"><h3>Threshold (Beta)</h3><p id="stat-beta">0.9</p></div>
+                </div>
+            </section>
+
+            <!-- Dataset Section -->
+            <section id="dataset" class="hidden">
+                <h2>Dataset Information</h2>
+                <div class="info-card">
+                    <p><strong>Selected Scenario:</strong> Scenario A2 (15s NO-VPN)</p>
+                    <p><strong>Classes:</strong> BROWSING, CHAT, STREAMING, MAIL, VOIP, P2P, FT</p>
+                    <p><strong>Features:</strong> 23 Flow-based Time Features</p>
+                </div>
+            </section>
+
+            <!-- Model/Training Section -->
+            <section id="model" class="hidden">
+                <h2>Model Training Status</h2>
+                <button onclick="startTraining()">Start Training</button>
+                <div id="training-status" style="margin-top:15px;">Status: Idle</div>
+            </section>
+
+            <!-- Prediction Section -->
+            <section id="prediction" class="hidden">
+                <h2>Predict Flow Sample</h2>
+                <button onclick="runPrediction()">Run Sample Prediction</button>
+                <div id="prediction-result" class="result-box"></div>
+            </section>
+
+            <!-- Results Section -->
+            <section id="results" class="hidden">
+                <h2>Evaluation Metrics</h2>
+                <div class="info-card">
+                    <p>Metrics will be displayed here after testing.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
