@@ -150,6 +150,57 @@ public class MachineLearningService {
         return new PredictionResult(finalPrediction, classType, confidenceResult, betaThreshold, h1Result);
     }
     
+    /**
+     * PHASE 11: Final Cascade (H1 -> H2)
+     * Evaluates a sample through the full H1 binary detector, then H2 multi-class threshold.
+     */
+    public PredictionResult predictCascade(Instance instance, Instances dataHeader) throws Exception {
+        if (h1Classifier == null || h1DatasetHeader == null) {
+            throw new IllegalStateException("H1 Classifier is not trained yet.");
+        }
+
+        // 1. Prepare instance for H1 (Binary Format)
+        double[] h1Values = new double[h1DatasetHeader.numAttributes()];
+        for (int j = 0; j < h1DatasetHeader.numAttributes() - 1; j++) {
+            h1Values[j] = instance.value(j); // Copy feature values
+        }
+        // Class value is unknown at prediction time, set as missing
+        h1Values[h1DatasetHeader.classIndex()] = weka.core.Utils.missingValue();
+        
+        DenseInstance h1Instance = new DenseInstance(1.0, h1Values);
+        h1Instance.setDataset(h1DatasetHeader);
+
+        // 2. Evaluate using H1
+        double h1PredictionIndex = h1Classifier.classifyInstance(h1Instance);
+        String h1PredictionLabel = h1DatasetHeader.classAttribute().value((int) h1PredictionIndex);
+
+        // 3. Early Exit if H1 catches a difficult NewC
+        if ("NEW".equals(h1PredictionLabel)) {
+            // H1 blocked it! We can bypass H2 entirely.
+            // We get H2 confidences purely for reporting/dashboard visibility, though not strictly required.
+            ConfidenceResult confidenceResult = getH2Confidence(instance, dataHeader);
+            
+            return new PredictionResult("NEW_CLASS", "NEW", confidenceResult, betaThreshold, "NEW_CLASS_DETECTED");
+        }
+
+        // 4. Pass to H2 (If H1 said "KNOWN")
+        String h1Result = "PASS_TO_H2";
+        ConfidenceResult confidenceResult = getH2Confidence(instance, dataHeader);
+
+        String classType;
+        String finalPrediction;
+
+        if (confidenceResult.getCfDMax() > betaThreshold) {
+            classType = "KNOWN";
+            finalPrediction = confidenceResult.getPredictedClass();
+        } else {
+            classType = "NEW";
+            finalPrediction = "NEW_CLASS";
+        }
+
+        return new PredictionResult(finalPrediction, classType, confidenceResult, betaThreshold, h1Result);
+    }
+
     public void setBetaThreshold(double betaThreshold) {
         this.betaThreshold = betaThreshold;
     }
