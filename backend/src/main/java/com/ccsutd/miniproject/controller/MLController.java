@@ -103,6 +103,9 @@ public class MLController {
         }
     }
 
+    @Autowired(required = false)
+    private com.ccsutd.miniproject.repository.ExperimentRunRepository experimentRunRepository;
+
     @GetMapping("/train-full-cascade")
     public ResponseEntity<Map<String, Object>> trainFullCascade(
             @RequestParam(defaultValue = "../Scenario A2-ARFF/Scenario A2-ARFF/TimeBasedFeatures-Dataset-15s-NO-VPN.arff") String filePath) {
@@ -114,28 +117,20 @@ public class MLController {
             Instances reducedUnlabelled = featureSelectionService.transform(split.getUnlabelledData());
             Instances reducedTesting = featureSelectionService.transform(split.getTestingData());
 
-            // Train H2 baseline needed for CfDmax extractions
             mlService.trainH2Classifier(reducedKnownTraining);
-
-            // Phase 7: Extract pseudo-negatives & likely-knowns via OC-SVM
             OcSvmResult ocSvmResult = ocSvmService.selectPseudoNegatives(reducedKnownTraining, reducedUnlabelled);
 
-            // Phase 10: ATS Calculation
             double atsAlpha = atsService.calculateAdaptiveThreshold(
                     reducedKnownTraining, 
                     ocSvmResult.getPseudoNegatives(), 
                     ocSvmResult.getLikelyKnowns()
             );
-            
-            // Set beta to ATS alpha as recommended by the paper
             mlService.setBetaThreshold(atsAlpha);
 
-            // Phase 8: Train H1 Classifier
             long startTrainH1 = System.currentTimeMillis();
             mlService.trainH1Classifier(reducedKnownTraining, ocSvmResult.getPseudoNegatives());
             long trainH1Time = System.currentTimeMillis() - startTrainH1;
 
-            // Phase 11: Final Cascade Testing
             int totalTested = 0, correctKnown = 0, correctNew = 0, falseKnown = 0, falseNew = 0;
             int h1EarlyBlocks = 0;
             
@@ -166,6 +161,30 @@ public class MLController {
             double knownAccuracy = totalActuallyKnown > 0 ? (double) correctKnown / totalActuallyKnown : 0;
             double unknownAccuracy = totalActuallyNew > 0 ? (double) correctNew / totalActuallyNew : 0;
             double normalizedAccuracy = 0.5 * knownAccuracy + 0.5 * unknownAccuracy;
+
+            // Phase 12: Save metrics to Cloud Database if configured
+            if (experimentRunRepository != null) {
+                try {
+                    com.ccsutd.miniproject.entity.ExperimentRun run = new com.ccsutd.miniproject.entity.ExperimentRun();
+                    run.setRunDate(java.time.LocalDateTime.now());
+                    run.setAtsCalculatedAlpha(atsAlpha);
+                    run.setPseudoNegativesUsed(ocSvmResult.getPseudoNegatives().numInstances());
+                    run.setLikelyKnownsUsed(ocSvmResult.getLikelyKnowns().numInstances());
+                    run.setH1TrainTimeMs(trainH1Time);
+                    run.setTotalTested(totalTested);
+                    run.setCorrectKnown(correctKnown);
+                    run.setCorrectNew(correctNew);
+                    run.setFalseKnown(falseKnown);
+                    run.setFalseNew(falseNew);
+                    run.setH1EarlyBlocks(h1EarlyBlocks);
+                    run.setKnownAccuracy(knownAccuracy);
+                    run.setUnknownAccuracy(unknownAccuracy);
+                    run.setNormalizedAccuracy(normalizedAccuracy);
+                    experimentRunRepository.save(run);
+                } catch (Exception dbEx) {
+                    System.err.println("Database saving failed (is Postgres running?): " + dbEx.getMessage());
+                }
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
