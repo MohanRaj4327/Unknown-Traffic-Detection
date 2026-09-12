@@ -210,13 +210,22 @@ async function loadHistory() {
 }
 
 function downloadPDF() {
+    const accuracyText = document.getElementById('stat-na').innerText;
+    if (accuracyText === "0%") {
+        alert("⚠️ Please run the Machine Learning Pipeline first so there is data to export!");
+        return;
+    }
+
     const element = document.getElementById('report-content');
     const opt = {
-      margin:       1,
+      margin:       0.5,
       filename:     'CCS-UTD-Security-Report.pdf',
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2 },
+      image:        { type: 'jpeg', quality: 1.0 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#0b0c10' },
       jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
     };
+    
+    // Add a temporary class to ensure dark mode text renders perfectly in PDF
+    element.style.color = '#c5c6c7';
     html2pdf().set(opt).from(element).save();
 }

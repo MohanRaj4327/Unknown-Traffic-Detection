@@ -63,16 +63,18 @@
         <main class="content">
             <!-- Dashboard Section -->
             <section id="dashboard" class="active">
-                <h2>Live Metrics Dashboard</h2>
-                <div class="stats-grid">
-                    <div class="stat-card"><h3>Normalized Accuracy</h3><p id="stat-na">0%</p></div>
-                    <div class="stat-card"><h3>Known Accuracy</h3><p id="stat-known-acc">0%</p></div>
-                    <div class="stat-card"><h3>New Class Accuracy</h3><p id="stat-new-acc">0%</p></div>
-                    <div class="stat-card"><h3>ATS Alpha</h3><p id="stat-alpha">0.90</p></div>
-                </div>
-                
-                <div class="chart-container" id="report-content">
-                    <canvas id="metricsChart"></canvas>
+                <div id="report-content" style="padding: 20px; background-color: #0b0c10; color: #c5c6c7;">
+                    <h2 style="color: #66fcf1; border-bottom: 1px solid #45a29e; padding-bottom: 10px;">Live Metrics Dashboard</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card"><h3>Normalized Accuracy</h3><p id="stat-na">0%</p></div>
+                        <div class="stat-card"><h3>Known Accuracy</h3><p id="stat-known-acc">0%</p></div>
+                        <div class="stat-card"><h3>New Class Accuracy</h3><p id="stat-new-acc">0%</p></div>
+                        <div class="stat-card"><h3>ATS Alpha</h3><p id="stat-alpha">0.90</p></div>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <canvas id="metricsChart"></canvas>
+                    </div>
                 </div>
                 
                 <button onclick="downloadPDF()" style="margin-top: 20px; background-color: #f39c12; color: #111;">📄 Export to PDF</button>
