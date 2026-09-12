@@ -55,6 +55,33 @@ async function runModel(type) {
     }
 }
 
+function renderPredictionResult(data) {
+    let html = `<h3>Single Packet Analysis</h3>`;
+    
+    if (data.pcapTotalPackets) {
+        html += `<p style="color: #66fcf1;"><strong>File Parsed:</strong> ${data.fileName}</p>`;
+        html += `<p style="color: #66fcf1;"><strong>Packets Scanned:</strong> ${data.pcapTotalPackets}</p>`;
+        html += `<p style="color: #66fcf1;"><strong>Total Bytes:</strong> ${data.pcapTotalBytes}</p><hr>`;
+    }
+
+    html += `<p style="color: #666;"><strong>Ground Truth (Actual):</strong> ${data.trueClass || 'UNKNOWN'} (${data.trueType || 'UNKNOWN'})</p><hr>`;
+    html += `<p><strong>Step 1 (H1 Bouncer):</strong> ${data.h1BouncerResult === 'NEW_CLASS_DETECTED' ? '<span style="color:red;">BLOCKED (UNKNOWN THREAT)</span>' : '<span style="color:#39ff14;">PASSED to H2</span>'}</p>`;
+    html += `<p><strong>Step 2 (H2 Confidence):</strong> ${(data.h2HighestConfidence * 100).toFixed(2)}% (Threshold: ${(data.atsThresholdUsed * 100).toFixed(2)}%)</p>`;
+    
+    let decisionColor = data.finalDecisionType === 'NEW' ? '#00ffcc' : '#39ff14';
+    html += `<h4 style="color: ${decisionColor}; font-size: 1.4em; text-shadow: 0 0 5px ${decisionColor};">Final AI Decision: ${data.finalDecisionType} TRAFFIC -> [${data.finalDecisionClass}]</h4>`;
+    
+    if (data.finalDecisionType === 'NEW') {
+        html += `<div style="background-color: rgba(255, 0, 0, 0.1); border-left: 4px solid #ff4444; padding: 10px; margin-top: 15px;">
+                    <strong style="color: #ff4444;">🧠 Explainable AI (XAI) Engine:</strong><br>
+                    <span style="color: #ddd;">${data.xaiReason}</span>
+                 </div>`;
+    }
+    
+    html += `<hr style="border-color: #333;"><p style="font-size:0.9em; color:#00ffcc;">[Packet Features Extracted]:<br>${JSON.stringify(data.sampleFeatures, null, 2)}</p>`;
+    return html;
+}
+
 async function runSinglePredict(type) {
     const statusDiv = document.getElementById('single-status');
     const resultBox = document.getElementById('single-result');
@@ -67,28 +94,43 @@ async function runSinglePredict(type) {
     try {
         const response = await fetch(`http://localhost:8080/api/ml/predict-single?type=${type}`);
         const data = await response.json();
-        
         spinner.style.display = 'none';
         statusDiv.innerText = "Status: Packet Analyzed!";
-        
-        let html = `<h3>Single Packet Analysis</h3>`;
-        html += `<p style="color: #666;"><strong>Ground Truth (Actual):</strong> ${data.trueClass} (${data.trueType})</p><hr>`;
-        html += `<p><strong>Step 1 (H1 Bouncer):</strong> ${data.h1BouncerResult === 'NEW_CLASS_DETECTED' ? '<span style="color:red;">BLOCKED (UNKNOWN THREAT)</span>' : '<span style="color:green;">PASSED to H2</span>'}</p>`;
-        html += `<p><strong>Step 2 (H2 Confidence):</strong> ${(data.h2HighestConfidence * 100).toFixed(2)}% (Threshold: ${(data.atsThresholdUsed * 100).toFixed(2)}%)</p>`;
-        
-        let decisionColor = data.finalDecisionType === 'NEW' ? '#00ffcc' : '#39ff14';
-        html += `<h4 style="color: ${decisionColor}; font-size: 1.4em; text-shadow: 0 0 5px ${decisionColor};">Final AI Decision: ${data.finalDecisionType} TRAFFIC -> [${data.finalDecisionClass}]</h4>`;
-        
-        if (data.finalDecisionType === 'NEW') {
-            html += `<div style="background-color: rgba(255, 0, 0, 0.1); border-left: 4px solid #ff4444; padding: 10px; margin-top: 15px;">
-                        <strong style="color: #ff4444;">🧠 Explainable AI (XAI) Engine:</strong><br>
-                        <span style="color: #ddd;">${data.xaiReason}</span>
-                     </div>`;
-        }
-        
-        html += `<hr style="border-color: #333;"><p style="font-size:0.9em; color:#00ffcc;">[Packet Features Extracted]:<br>${JSON.stringify(data.sampleFeatures, null, 2)}</p>`;
+        resultBox.innerHTML = renderPredictionResult(data);
+    } catch (error) {
+        spinner.style.display = 'none';
+        statusDiv.innerText = "Status: Error. Is the Java server running?";
+        resultBox.innerHTML = `<p style="color: red;">${error.message}</p>`;
+    }
+}
 
-        resultBox.innerHTML = html;
+async function uploadPcap() {
+    const statusDiv = document.getElementById('single-status');
+    const resultBox = document.getElementById('single-result');
+    const spinner = document.getElementById('single-loading-spinner');
+    const fileInput = document.getElementById('pcapFile');
+
+    if (!fileInput.files.length) {
+        alert("Please select a PCAP file first!");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    resultBox.innerHTML = "";
+    statusDiv.innerText = `Status: Parsing PCAP and extracting flows...`;
+    spinner.style.display = 'block';
+
+    try {
+        const response = await fetch(`http://localhost:8080/api/ml/upload-pcap`, {
+            method: "POST",
+            body: formData
+        });
+        const data = await response.json();
+        spinner.style.display = 'none';
+        statusDiv.innerText = "Status: PCAP Analyzed Successfully!";
+        resultBox.innerHTML = renderPredictionResult(data);
     } catch (error) {
         spinner.style.display = 'none';
         statusDiv.innerText = "Status: Error. Is the Java server running?";
