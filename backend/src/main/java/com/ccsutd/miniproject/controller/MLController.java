@@ -264,10 +264,38 @@ public class MLController {
             // 3. Run the single instance through the Cascade!
             PredictionResult prediction = mlService.predictCascade(targetInstance, reducedTesting);
 
+            // 4. Calculate XAI (Explainable AI) Z-Score Anomaly Reason
+            String xaiReason = "Traffic conforms to known historical distributions.";
+            if ("NEW".equals(prediction.getClassType())) {
+                double maxZScore = -1.0;
+                String anomalousFeature = "";
+                double anomalousValue = 0;
+                double expectedMean = 0;
+                
+                for (int j = 0; j < reducedKnownTraining.numAttributes() - 1; j++) {
+                    double mean = reducedKnownTraining.meanOrMode(j);
+                    double stdDev = Math.sqrt(reducedKnownTraining.variance(j));
+                    double val = targetInstance.value(j);
+                    
+                    if (stdDev > 0) {
+                        double zScore = Math.abs((val - mean) / stdDev);
+                        if (zScore > maxZScore) {
+                            maxZScore = zScore;
+                            anomalousFeature = reducedKnownTraining.attribute(j).name();
+                            anomalousValue = val;
+                            expectedMean = mean;
+                        }
+                    }
+                }
+                xaiReason = String.format("XAI ALERT: Feature '%s' spiked to %.2f. (Normal known traffic average is only %.2f). This massive deviation triggered the H1 Bouncer.", 
+                    anomalousFeature, anomalousValue, expectedMean);
+            }
+
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             response.put("trueClass", trueClass);
             response.put("trueType", KNOWN_CLASSES.contains(trueClass) ? "KNOWN" : "UNKNOWN (ZERO-DAY)");
+            response.put("xaiReason", xaiReason);
             
             // Extract some sample features to make it look like a real packet
             Map<String, Double> features = new HashMap<>();

@@ -76,10 +76,17 @@ async function runSinglePredict(type) {
         html += `<p><strong>Step 1 (H1 Bouncer):</strong> ${data.h1BouncerResult === 'NEW_CLASS_DETECTED' ? '<span style="color:red;">BLOCKED (UNKNOWN THREAT)</span>' : '<span style="color:green;">PASSED to H2</span>'}</p>`;
         html += `<p><strong>Step 2 (H2 Confidence):</strong> ${(data.h2HighestConfidence * 100).toFixed(2)}% (Threshold: ${(data.atsThresholdUsed * 100).toFixed(2)}%)</p>`;
         
-        let decisionColor = data.finalDecisionType === 'NEW' ? 'red' : 'blue';
-        html += `<h4 style="color: ${decisionColor}; font-size: 1.2em;">Final AI Decision: ${data.finalDecisionType} TRAFFIC -> [${data.finalDecisionClass}]</h4>`;
+        let decisionColor = data.finalDecisionType === 'NEW' ? '#00ffcc' : '#39ff14';
+        html += `<h4 style="color: ${decisionColor}; font-size: 1.4em; text-shadow: 0 0 5px ${decisionColor};">Final AI Decision: ${data.finalDecisionType} TRAFFIC -> [${data.finalDecisionClass}]</h4>`;
         
-        html += `<hr><p style="font-size:0.9em; color:#888;">Sample Features:<br>${JSON.stringify(data.sampleFeatures, null, 2)}</p>`;
+        if (data.finalDecisionType === 'NEW') {
+            html += `<div style="background-color: rgba(255, 0, 0, 0.1); border-left: 4px solid #ff4444; padding: 10px; margin-top: 15px;">
+                        <strong style="color: #ff4444;">🧠 Explainable AI (XAI) Engine:</strong><br>
+                        <span style="color: #ddd;">${data.xaiReason}</span>
+                     </div>`;
+        }
+        
+        html += `<hr style="border-color: #333;"><p style="font-size:0.9em; color:#00ffcc;">[Packet Features Extracted]:<br>${JSON.stringify(data.sampleFeatures, null, 2)}</p>`;
 
         resultBox.innerHTML = html;
     } catch (error) {
@@ -104,6 +111,22 @@ function updateChart(knownAcc, unknownAcc, normAcc) {
                 borderWidth: 1
             }]
         },
-        options: { scales: { y: { beginAtZero: true, max: 100 } } }
+        options: { 
+            scales: { 
+                y: { 
+                    beginAtZero: true, 
+                    max: 100,
+                    ticks: { color: '#c5c6c7' },
+                    grid: { color: '#333' }
+                },
+                x: {
+                    ticks: { color: '#c5c6c7' },
+                    grid: { color: '#333' }
+                }
+            },
+            plugins: {
+                legend: { labels: { color: '#c5c6c7' } }
+            }
+        }
     });
 }
