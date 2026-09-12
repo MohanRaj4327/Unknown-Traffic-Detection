@@ -417,6 +417,18 @@ public class MLController {
                     }
                 }
                 xaiReason = String.format("XAI ALERT: Feature '%s' spiked to %.2f. (Normal known traffic average is only %.2f). This massive deviation triggered the H1 Bouncer.", anomalousFeature, anomalousValue, expectedMean);
+                
+                // SIMULATE EMAIL ALERT
+                System.out.println("\n=======================================================");
+                System.out.println("📧 [SMTP SERVER] SENDING CRITICAL EMAIL ALERT TO ADMIN");
+                System.out.println("=======================================================");
+                System.out.println("To: security-admin@ccs-utd.edu");
+                System.out.println("Subject: CRITICAL: Zero-Day Network Threat Detected!");
+                System.out.println("Body:");
+                System.out.println("A Zero-Day Unknown traffic anomaly was just intercepted.");
+                System.out.println("Reason: " + xaiReason);
+                System.out.println("Action Taken: Packet Blocked by H1 Classifier.");
+                System.out.println("=======================================================\n");
             }
             
             response.put("xaiReason", xaiReason);
@@ -432,6 +444,23 @@ public class MLController {
             error.put("status", "error");
             error.put("message", e.getMessage());
             return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<Object> getDatabaseHistory() {
+        try {
+            if (experimentRunRepository != null) {
+                // Fetch all runs from the Supabase database
+                List<com.ccsutd.miniproject.entity.ExperimentRun> history = experimentRunRepository.findAll();
+                // Sort by runDate descending
+                history.sort((a, b) -> b.getRunDate().compareTo(a.getRunDate()));
+                return ResponseEntity.ok(history);
+            } else {
+                return ResponseEntity.badRequest().body("Database not connected.");
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error fetching history: " + e.getMessage());
         }
     }
 }

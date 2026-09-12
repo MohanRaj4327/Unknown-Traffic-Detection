@@ -172,3 +172,51 @@ function updateChart(knownAcc, unknownAcc, normAcc) {
         }
     });
 }
+
+async function loadHistory() {
+    const historyBox = document.getElementById('history-content');
+    historyBox.innerHTML = '<p style="color: #66fcf1;">Fetching database logs...</p>';
+    try {
+        const response = await fetch('http://localhost:8080/api/ml/history');
+        const data = await response.json();
+        
+        let html = `<table>
+            <thead>
+                <tr>
+                    <th>Run Date</th>
+                    <th>Norm. Accuracy</th>
+                    <th>Unknown Accuracy</th>
+                    <th>H1 Early Blocks</th>
+                    <th>ATS Alpha</th>
+                </tr>
+            </thead>
+            <tbody>`;
+            
+        data.forEach(run => {
+            html += `<tr>
+                <td>${new Date(run.runDate).toLocaleString()}</td>
+                <td>${(run.normalizedAccuracy * 100).toFixed(2)}%</td>
+                <td>${(run.unknownAccuracy * 100).toFixed(2)}%</td>
+                <td>${run.h1EarlyBlocks}</td>
+                <td>${run.atsCalculatedAlpha.toFixed(2)}</td>
+            </tr>`;
+        });
+        
+        html += `</tbody></table>`;
+        historyBox.innerHTML = html;
+    } catch (error) {
+        historyBox.innerHTML = `<p style="color: red;">Error fetching history: ${error.message}</p>`;
+    }
+}
+
+function downloadPDF() {
+    const element = document.getElementById('report-content');
+    const opt = {
+      margin:       1,
+      filename:     'CCS-UTD-Security-Report.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
+    };
+    html2pdf().set(opt).from(element).save();
+}

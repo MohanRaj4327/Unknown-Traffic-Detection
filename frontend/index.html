@@ -6,6 +6,7 @@
     <title>CCS-UTD Mini Project Dashboard</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         .spinner {
             display: none;
@@ -23,6 +24,21 @@
             max-width: 600px;
             margin: 20px auto;
         }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            color: #c5c6c7;
+        }
+        th, td {
+            border: 1px solid #45a29e;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #1f2833;
+            color: #66fcf1;
+        }
     </style>
 </head>
 <body>
@@ -39,6 +55,7 @@
                 <li><a href="#" onclick="showSection('dataset')">Dataset Info</a></li>
                 <li><a href="#" onclick="showSection('model')">Model Runner</a></li>
                 <li><a href="#" onclick="showSection('predict')">Live Single Prediction</a></li>
+                <li><a href="#" onclick="showSection('history'); loadHistory();">Database History</a></li>
             </ul>
         </nav>
 
@@ -54,9 +71,11 @@
                     <div class="stat-card"><h3>ATS Alpha</h3><p id="stat-alpha">0.90</p></div>
                 </div>
                 
-                <div class="chart-container">
+                <div class="chart-container" id="report-content">
                     <canvas id="metricsChart"></canvas>
                 </div>
+                
+                <button onclick="downloadPDF()" style="margin-top: 20px; background-color: #f39c12; color: #111;">📄 Export to PDF</button>
             </section>
 
             <!-- Dataset Section -->
@@ -110,6 +129,15 @@
                 
                 <div id="single-result" class="result-box" style="margin-top: 20px; font-family: monospace;">
                     <!-- Prediction breakdown dumped here -->
+                </div>
+            </section>
+
+            <!-- History Section -->
+            <section id="history" class="hidden">
+                <h2>Supabase Cloud Database History</h2>
+                <p>Live feed of all AI execution runs saved directly to the PostgreSQL cloud database.</p>
+                <div id="history-content">
+                    <p style="color: #66fcf1;">Fetching database logs...</p>
                 </div>
             </section>
         </main>
