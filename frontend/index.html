@@ -38,6 +38,7 @@
                 <li><a href="#" onclick="showSection('dashboard')">Dashboard</a></li>
                 <li><a href="#" onclick="showSection('dataset')">Dataset Info</a></li>
                 <li><a href="#" onclick="showSection('model')">Model Runner</a></li>
+                <li><a href="#" onclick="showSection('predict')">Live Single Prediction</a></li>
             </ul>
         </nav>
 
@@ -84,6 +85,24 @@
                 
                 <div id="prediction-result" class="result-box" style="margin-top: 20px;">
                     <!-- Detailed metrics dumped here -->
+                </div>
+            </section>
+
+            <!-- Single Prediction Section -->
+            <section id="predict" class="hidden">
+                <h2>Live Single Packet Prediction</h2>
+                <p>Inject a single random network flow packet into the AI to see how it decides step-by-step.</p>
+                
+                <div style="margin-top:20px; display: flex; gap: 10px;">
+                    <button onclick="runSinglePredict('known')" style="background-color: #007bff;">Inject KNOWN Traffic Sample</button>
+                    <button onclick="runSinglePredict('unknown')" style="background-color: #dc3545;">Inject UNKNOWN (Zero-Day) Traffic Sample</button>
+                </div>
+
+                <div class="spinner" id="single-loading-spinner"></div>
+                <div id="single-status" style="margin-top:15px; font-weight: bold; color: #333;">Status: Waiting for injection...</div>
+                
+                <div id="single-result" class="result-box" style="margin-top: 20px; font-family: monospace;">
+                    <!-- Prediction breakdown dumped here -->
                 </div>
             </section>
         </main>

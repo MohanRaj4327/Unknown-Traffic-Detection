@@ -23,8 +23,11 @@ import java.util.Set;
 import java.util.Arrays;
 import java.util.HashSet;
 
+import org.springframework.web.bind.annotation.CrossOrigin;
+
 @RestController
 @RequestMapping("/api/ml")
+@CrossOrigin(origins = "*")
 public class MLController {
 
     @Autowired
@@ -206,6 +209,81 @@ public class MLController {
             response.put("cascadeMetrics", cascadeMetrics);
             
             return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    @GetMapping("/predict-single")
+    public ResponseEntity<Map<String, Object>> predictSingle(
+            @RequestParam(defaultValue = "unknown") String type,
+            @RequestParam(defaultValue = "../Scenario A2-ARFF/Scenario A2-ARFF/TimeBasedFeatures-Dataset-15s-NO-VPN.arff") String filePath) {
+        try {
+            // 1. Prepare data and models just like the full run
+            Instances rawData = datasetService.loadDataset(filePath);
+            DatasetSplit split = datasetService.prepareOpenSetExperiment(rawData);
+            
+            Instances reducedKnownTraining = featureSelectionService.fitAndTransform(split.getKnownTrainingData());
+            Instances reducedUnlabelled = featureSelectionService.transform(split.getUnlabelledData());
+            Instances reducedTesting = featureSelectionService.transform(split.getTestingData());
+
+            mlService.trainH2Classifier(reducedKnownTraining);
+            OcSvmResult ocSvmResult = ocSvmService.selectPseudoNegatives(reducedKnownTraining, reducedUnlabelled);
+            double atsAlpha = atsService.calculateAdaptiveThreshold(reducedKnownTraining, ocSvmResult.getPseudoNegatives(), ocSvmResult.getLikelyKnowns());
+            mlService.setBetaThreshold(atsAlpha);
+            mlService.trainH1Classifier(reducedKnownTraining, ocSvmResult.getPseudoNegatives());
+
+            // 2. Find a specific test instance based on the user's request
+            Instance targetInstance = null;
+            String trueClass = "";
+            java.util.Collections.shuffle(reducedTesting, new java.util.Random(System.currentTimeMillis())); // Truly random pick each time
+
+            for (int i = 0; i < reducedTesting.numInstances(); i++) {
+                Instance inst = reducedTesting.instance(i);
+                String actualClass = reducedTesting.classAttribute().value((int) inst.classValue());
+                boolean isKnown = KNOWN_CLASSES.contains(actualClass);
+                
+                if (type.equalsIgnoreCase("known") && isKnown) {
+                    targetInstance = inst;
+                    trueClass = actualClass;
+                    break;
+                } else if (type.equalsIgnoreCase("unknown") && !isKnown) {
+                    targetInstance = inst;
+                    trueClass = actualClass;
+                    break;
+                }
+            }
+
+            if (targetInstance == null) {
+                throw new Exception("Could not find a matching sample for type: " + type);
+            }
+
+            // 3. Run the single instance through the Cascade!
+            PredictionResult prediction = mlService.predictCascade(targetInstance, reducedTesting);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("trueClass", trueClass);
+            response.put("trueType", KNOWN_CLASSES.contains(trueClass) ? "KNOWN" : "UNKNOWN (ZERO-DAY)");
+            
+            // Extract some sample features to make it look like a real packet
+            Map<String, Double> features = new HashMap<>();
+            for(int j=0; j<Math.min(5, targetInstance.numAttributes()-1); j++) {
+                features.put(reducedTesting.attribute(j).name(), targetInstance.value(j));
+            }
+            response.put("sampleFeatures", features);
+            
+            response.put("h1BouncerResult", prediction.getH1Result());
+            response.put("h2HighestConfidence", prediction.getConfidenceResult().getCfDMax());
+            response.put("finalDecisionClass", prediction.getPredictedClass());
+            response.put("finalDecisionType", prediction.getClassType());
+            response.put("atsThresholdUsed", atsAlpha);
+
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
             Map<String, Object> error = new HashMap<>();
             error.put("status", "error");
