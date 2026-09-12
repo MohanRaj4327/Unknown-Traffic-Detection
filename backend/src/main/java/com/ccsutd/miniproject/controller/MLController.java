@@ -277,7 +277,7 @@ public class MLController {
             response.put("sampleFeatures", features);
             
             response.put("h1BouncerResult", prediction.getH1Result());
-            response.put("h2HighestConfidence", prediction.getConfidenceResult().getCfDMax());
+            response.put("h2HighestConfidence", prediction.getConfidenceMetrics().getCfDMax());
             response.put("finalDecisionClass", prediction.getPredictedClass());
             response.put("finalDecisionType", prediction.getClassType());
             response.put("atsThresholdUsed", atsAlpha);

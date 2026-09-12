@@ -2,14 +2,16 @@ package com.ccsutd.miniproject.service;
 
 import com.ccsutd.miniproject.dto.ConfidenceResult;
 import com.ccsutd.miniproject.dto.OcSvmResult;
+import libsvm.svm;
+import libsvm.svm_model;
+import libsvm.svm_node;
+import libsvm.svm_parameter;
+import libsvm.svm_problem;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import weka.classifiers.functions.LibSVM;
 import weka.core.Instance;
 import weka.core.Instances;
-import weka.filters.Filter;
-import weka.filters.unsupervised.instance.RemoveWithValues;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,7 +27,8 @@ public class OcSvmService {
     @Autowired
     private MachineLearningService mlService;
 
-    private Map<String, LibSVM> ocSvmModels = new HashMap<>();
+    // Store raw libsvm models
+    private Map<String, svm_model> ocSvmModels = new HashMap<>();
 
     public OcSvmResult selectPseudoNegatives(Instances knownTrainingData, Instances unlabelledData) throws Exception {
         
@@ -44,36 +47,74 @@ public class OcSvmService {
             }
         }
 
+        // Train one OC-SVM per Known Class using raw LibSVM
         for (String className : knownClasses) {
-            RemoveWithValues filter = new RemoveWithValues();
-            int classIndex = knownTrainingData.classIndex();
-            filter.setAttributeIndex(String.valueOf(classIndex + 1));
             
-            int nominalIndex = knownTrainingData.classAttribute().indexOfValue(className) + 1;
-            filter.setNominalIndices(String.valueOf(nominalIndex));
-            filter.setInvertSelection(true); 
-            filter.setInputFormat(knownTrainingData);
+            // 1. Gather instances for this class
+            List<Instance> classInstances = new ArrayList<>();
+            for (int i = 0; i < knownTrainingData.numInstances(); i++) {
+                if (knownTrainingData.instance(i).stringValue(knownTrainingData.classIndex()).equals(className)) {
+                    classInstances.add(knownTrainingData.instance(i));
+                }
+            }
             
-            Instances singleClassData = Filter.useFilter(knownTrainingData, filter);
-
-            LibSVM svm = new LibSVM();
-            svm.setSVMType(new weka.core.SelectedTag(2, LibSVM.TAGS_SVMTYPE));
-            svm.buildClassifier(singleClassData);
+            // 2. Prepare svm_problem
+            svm_problem prob = new svm_problem();
+            prob.l = classInstances.size();
+            prob.y = new double[prob.l];
+            prob.x = new svm_node[prob.l][];
             
-            ocSvmModels.put(className, svm);
+            int numFeatures = knownTrainingData.numAttributes() - 1;
+            
+            for (int i = 0; i < classInstances.size(); i++) {
+                Instance inst = classInstances.get(i);
+                svm_node[] nodes = new svm_node[numFeatures];
+                for (int j = 0; j < numFeatures; j++) {
+                    nodes[j] = new svm_node();
+                    nodes[j].index = j + 1; // libsvm uses 1-based indexing for features
+                    nodes[j].value = inst.value(j);
+                }
+                prob.x[i] = nodes;
+                prob.y[i] = 1.0; // Target class label
+            }
+            
+            // 3. Set parameters for One-Class SVM
+            svm_parameter param = new svm_parameter();
+            param.svm_type = svm_parameter.ONE_CLASS;
+            param.kernel_type = svm_parameter.RBF;
+            param.gamma = 1.0 / numFeatures;
+            param.nu = 0.5; // typical default
+            param.cache_size = 100;
+            param.eps = 1e-3;
+            
+            // 4. Train model
+            svm_model model = svm.svm_train(prob, param);
+            ocSvmModels.put(className, model);
         }
 
         Instances pseudoNegatives = new Instances(unlabelledData, 0);
         Instances likelyKnowns = new Instances(unlabelledData, 0);
+        int numFeatures = unlabelledData.numAttributes() - 1;
 
+        // 5. Predict on Unlabelled Data
         for (int i = 0; i < unlabelledData.numInstances(); i++) {
             Instance sample = unlabelledData.instance(i);
             
+            // Convert to libsvm format
+            svm_node[] nodes = new svm_node[numFeatures];
+            for (int j = 0; j < numFeatures; j++) {
+                nodes[j] = new svm_node();
+                nodes[j].index = j + 1;
+                nodes[j].value = sample.value(j);
+            }
+            
             boolean rejectedByAll = true;
-            for (Map.Entry<String, LibSVM> entry : ocSvmModels.entrySet()) {
-                LibSVM svm = entry.getValue();
-                double prediction = svm.classifyInstance(sample);
-                if (prediction == 0.0) { 
+            for (Map.Entry<String, svm_model> entry : ocSvmModels.entrySet()) {
+                svm_model model = entry.getValue();
+                double prediction = svm.svm_predict(model, nodes);
+                
+                // One-class SVM predicts 1.0 for in-class, -1.0 for out-class
+                if (prediction > 0) { 
                     rejectedByAll = false;
                     break;
                 }
